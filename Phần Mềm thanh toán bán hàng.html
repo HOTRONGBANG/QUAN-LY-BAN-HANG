@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Phần Mềm thanh toán bán hàng 00</title>
+  <!-- SheetJS for Export Excel -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    :root{
+      --accent:#0b76ff;
+      --muted:#666;
+      --bg:#f4f6f9;
+      --card:#fff;
+      --text:#222;
+      --success:#28a745;
+    }
+    [data-theme="dark"]{
+      --bg:#0f1720;
+      --card:#0b1220;
+      --text:#e6eef8;
+      --muted:#9aa6b2;
+    }
+    *{box-sizing:border-box}
+    body{
+      font-family:Inter,Segoe UI,Roboto,Arial;
+      margin:0;padding:0;
+      background:var(--bg);color:var(--text);
+    }
+    .app{max-width:1200px;margin:24px auto;padding:20px;background:var(--card);border-radius:10px;
+      box-shadow:0 6px 18px rgba(20,20,40,0.06)}
+    header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+    header .left{display:flex;flex-direction:column}
+    h1{font-size:20px;margin:0;color:var(--accent)}
+    .muted{color:var(--muted);font-size:13px}
+    nav{margin-top:16px;display:flex;gap:10px;flex-wrap:wrap}
+    nav button{padding:8px 14px;border-radius:6px;border:1px solid #ccc;background:transparent;cursor:pointer}
+    nav button.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+    .layout{display:grid;grid-template-columns:1fr 380px;gap:18px;margin-top:18px}
+    /* products */
+    .products{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+    .card{background:var(--card);border:1px solid #eef2f6;padding:12px;border-radius:8px}
+    .card h3{margin:0;font-size:16px}
+    .price{color:var(--accent);font-weight:700}
+    .prod-actions{display:flex;align-items:center;gap:8px;margin-top:8px}
+    button.primary{background:var(--accent);color:#fff;border:none;padding:8px 10px;border-radius:8px;cursor:pointer}
+    button.ghost{background:transparent;color:var(--accent);border:1px solid #d5e6ff}
+    /* cart */
+    .cart{border-left:1px dashed #eee;padding-left:14px}
+    .cart h2{margin-top:0}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:6px;text-align:left}
+    tbody tr{border-bottom:1px solid #f1f3f6}
+    .qty{width:64px}
+    .total{font-size:18px;font-weight:700;text-align:right}
+    .controls{display:flex;gap:8px;align-items:center;margin:8px 0}
+    input[type=number],input[type=text],select{padding:6px;border-radius:6px;border:1px solid #e3e7ee;background:transparent;color:var(--text)}
+    /* invoice */
+    .invoice{background:var(--card);padding:12px;border:1px solid #eee;border-radius:8px;margin-top:12px}
+    .invoice .logo{font-weight:800;color:var(--accent);font-size:18px}
+    .invoice table{font-size:14px}
+    .small{font-size:13px;color:var(--muted)}
+    /* orders */
+    .orders-list{margin-top:10px}
+    .orders-container{max-height:400px;overflow-y:auto;border-radius:8px;overflow:hidden;border:1px solid #e6eef6}
+    .orders-container table{width:100%;border-collapse:collapse}
+    .orders-container thead th{position:sticky;top:0;background:var(--accent);color:#fff;padding:10px;z-index:2}
+    .orders-container tbody td{padding:10px;text-align:left;border-bottom:1px solid rgba(0,0,0,0.04)}
+    .orders-container tbody tr:hover{background:rgba(11,118,255,0.06);cursor:pointer}
+    .orders-container tfoot td{position:sticky;bottom:0;background:rgba(243,247,255,0.95);font-weight:700;padding:10px;border-top:2px solid #e3e7ee;color:var(--accent)}
+    .right{text-align:right}
+    .bold{font-weight:700}
+    .toolbar{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-bottom:10px}
+    .filters{display:flex;gap:8px;flex:1}
+    .filters input,.filters select{padding:8px;border-radius:6px;border:1px solid #dfe7f3}
+    .actions{display:flex;gap:8px}
+    .fade-in{animation:fadein 220ms ease}
+    @keyframes fadein{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+    @media(max-width:900px){.layout{grid-template-columns:1fr} .products{grid-template-columns:1fr}}
+    @media print{ body *{visibility:hidden} .print-area, .print-area *{visibility:visible} .print-area{position:fixed;left:0;top:0;width:80mm;padding:6mm} }
+  </style>
+</head>
+<body>
+  <div class="app" id="appRoot" data-theme="light">
+    <header>
+      <div class="left">
+        <h1>Hệ thống thanh toán tự động</h1>
+        <div class="muted">Mở file này bằng trình duyệt — Dữ liệu lưu trong LocalStorage</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div class="muted" style="font-size:13px">Chủ: github.com/HOTRONGBANG</div>
+        <button id="themeToggle" style="padding:6px 10px;border-radius:6px;border:1px solid #ddd;cursor:pointer">🌙 Dark</button>
+      </div>
+    </header>
+
+    <nav>
+      <button data-tab="sales" class="active">💵 Bán hàng</button>
+      <button data-tab="orders">📑 Hóa đơn</button>
+    </nav>
+
+    <!-- Tab bán hàng -->
+    <div id="tabSales" class="layout">
+      <div>
+        <section>
+          <h2>Sản phẩm</h2>
+          <div class="products" id="productList"></div>
+        </section>
+      </div>
+      <aside class="cart">
+        <h2>Giỏ hàng</h2>
+        <div class="small muted">Chọn số lượng, thanh toán và in hóa đơn</div>
+        <table style="margin-top:8px">
+          <thead><tr><th>Sản phẩm</th><th class="qty">SL</th><th class="right">ĐG</th></tr></thead>
+          <tbody id="cartBody"></tbody>
+        </table>
+        <div style="margin-top:10px">
+          <label class="small muted">Khuyến mãi (%): <input id="discount" type="number" value="0" min="0" max="100" style="width:80px"></label>
+        </div>
+        <div style="margin-top:10px">
+          <label class="small muted">VAT (%): <input id="tax" type="number" value="0" min="0" max="100" style="width:80px"></label>
+        </div>
+        <div style="margin-top:10px" class="total" id="totals">Tổng: 0₫</div>
+        <div class="controls">
+          <input id="customerName" type="text" placeholder="Tên khách (tuỳ chọn)" style="flex:1">
+          <select id="paymentMethod">
+            <option value="cash">Tiền mặt</option>
+            <option value="card">Thẻ</option>
+            <option value="online">Chuyển khoản</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button id="btnCheckout" class="primary">Thanh toán</button>
+          <button id="btnPrint" class="ghost">In hóa đơn</button>
+        </div>
+        <div class="invoice print-area" id="invoicePreview" style="display:none"></div>
+      </aside>
+    </div>
+
+    <!-- Tab hóa đơn -->
+    <div id="tabOrders" style="display:none;margin-top:20px">
+      <h2 style="text-align:center;color:var(--accent)">🧾 Danh sách hóa đơn</h2>
+
+      <div class="toolbar">
+        <div id="totalOrdersSum" style="font-weight:bold;color:var(--accent)"></div>
+        <div class="actions">
+          <button onclick="exportOrdersToExcel()" style="padding:6px 10px;border-radius:6px;border:none;background:var(--success);color:#fff;cursor:pointer">📤 Xuất Excel</button>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        <div class="filters" style="flex:1">
+          <input id="searchOrder" type="text" placeholder="🔎 Tìm mã/khách hàng" />
+          <input id="filterDate" type="date" />
+          <select id="filterPayment">
+            <option value="">--Tất cả--</option>
+            <option value="cash">Tiền mặt</option>
+            <option value="card">Thẻ</option>
+            <option value="online">Chuyển khoản</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="orders-list">
+        <div class="orders-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Mã HĐ</th>
+                <th>Khách hàng</th>
+                <th>Ngày giờ</th>
+                <th>Thanh toán</th>
+                <th class="right">Tổng</th>
+              </tr>
+            </thead>
+            <tbody id="ordersTable"></tbody>
+            <tfoot>
+              <tr>
+                <td colspan="4" style="text-align:right">Tổng cộng:</td>
+                <td id="totalOrdersFooter" class="right"></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+
+      <div id="orderDetail" class="invoice" style="display:none; margin-top:15px; border:1px solid #ddd; border-radius:8px; padding:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <strong>Chi tiết hóa đơn</strong>
+          <div style="display:flex;gap:8px">
+            <button id="btnPrintOrder" style="padding:6px 10px;border-radius:6px;border:none;background:var(--accent);color:#fff;cursor:pointer">🖨 In</button>
+            <button id="btnCloseDetail" style="padding:6px 10px;border-radius:6px;border:1px solid #ccc;background:transparent;cursor:pointer">✖ Đóng</button>
+          </div>
+        </div>
+        <div id="orderDetailContent" style="margin-top:10px" class="fade-in"></div>
+      </div>
+    </div>
+
+  </div>
+
+<script>
+/* -------------------------
+   Data keys & initial data
+   ------------------------- */
+const PRODUCTS_KEY='demo_products_v1'
+const ORDERS_KEY='demo_orders_v1'
+
+let products = [
+  {id:1, name:'cà phê sữa', price:20000},
+  {id:2, name:'nước ngọt', price:15000},
+  {id:3, name:'nước suối', price:10000},
+  {id:4, name:'cà phê đá', price:15000},
+  {id:5, name:'nước cam', price:20000},
+  {id:6, name:'trà chanh', price:10000}
+]
+if(localStorage.getItem(PRODUCTS_KEY)){products=JSON.parse(localStorage.getItem(PRODUCTS_KEY))}
+let cart={}
+
+/* -------------------------
+   Helpers
+   ------------------------- */
+function currency(v){ return Number(v).toLocaleString('vi-VN') + '₫' }
+
+/* -------------------------
+   Render products & cart
+   ------------------------- */
+const productListEl=document.getElementById('productList')
+const cartBody=document.getElementById('cartBody')
+const totalsEl=document.getElementById('totals')
+const discountEl=document.getElementById('discount')
+const taxEl=document.getElementById('tax')
+const invoicePreview=document.getElementById('invoicePreview')
+
+function renderProducts(){
+  productListEl.innerHTML=''
+  products.forEach(p=>{
+    const card=document.createElement('div')
+    card.className='card'
+    card.innerHTML=`
+      <h3>${p.name}</h3>
+      <div class="muted">Mã: ${p.id}</div>
+      <div class="price">${currency(p.price)}</div>
+      <div class="prod-actions">
+        <input type="number" min="1" value="1" data-id="${p.id}" style="width:70px">
+        <button data-add="${p.id}" class="primary">Thêm</button>
+      </div>`
+    productListEl.appendChild(card)
+  })
+}
+productListEl.addEventListener('click',e=>{
+  const id=e.target.getAttribute('data-add'); if(!id) return
+  const input=document.querySelector(`input[data-id='${id}']`)
+  const qty=Math.max(1,parseInt(input.value||1))
+  addToCart(parseInt(id),qty)
+})
+function addToCart(pid,qty=1){
+  const p=products.find(x=>x.id===pid); if(!p) return
+  cart[pid]=(cart[pid]||0)+qty; renderCart()
+}
+function renderCart(){
+  cartBody.innerHTML=''
+  Object.keys(cart).forEach(id=>{
+    const p=products.find(x=>x.id==id); const q=cart[id]
+    const line=p.price*q
+    const tr=document.createElement('tr')
+    tr.innerHTML=`
+      <td>${p.name}<div class="small muted">${currency(p.price)}</div></td>
+      <td><input type="number" min="0" data-q="${id}" value="${q}" style="width:70px"></td>
+      <td class="right">${currency(line)} <button data-remove="${id}" class="ghost" style="margin-left:8px">x</button></td>`
+    cartBody.appendChild(tr)
+  })
+  if(Object.keys(cart).length===0) cartBody.innerHTML='<tr><td colspan=3 class="small muted">Giỏ hàng trống</td></tr>'
+  updateTotals()
+}
+cartBody.addEventListener('input',e=>{
+  const id=e.target.getAttribute('data-q'); if(!id) return
+  let v=parseInt(e.target.value||0); if(v<=0) delete cart[id]; else cart[id]=v
+  renderCart()
+})
+cartBody.addEventListener('click',e=>{
+  const id=e.target.getAttribute('data-remove'); if(!id) return
+  delete cart[id]; renderCart()
+})
+function updateTotals(){
+  const subtotal=Object.keys(cart).reduce((s,id)=>s+products.find(x=>x.id==id).price*cart[id],0)
+  const discount=Math.max(0,parseFloat(discountEl.value||0))
+  const tax=Math.max(0,parseFloat(taxEl.value||0))
+  const after=subtotal*(1-discount/100)*(1+tax/100)
+  totalsEl.innerHTML=`Tổng: <span class="bold">${currency(Math.round(after))}</span>`
+}
+
+/* -------------------------
+   Checkout / Invoice preview
+   ------------------------- */
+document.getElementById('btnCheckout').addEventListener('click',()=>{
+  if(Object.keys(cart).length===0){alert('Giỏ hàng trống!');return}
+  const order=buildOrder(); saveOrder(order); renderOrders(); renderInvoice(order)
+  invoicePreview.style.display='block'; alert('Thanh toán thành công.')
+})
+document.getElementById('btnPrint').addEventListener('click',()=>{
+  if(invoicePreview.innerHTML.trim()===''){alert('Chưa có hóa đơn');return}
+  window.print()
+})
+function buildOrder(){
+  const id='25HD'+Date.now()
+  const items=Object.keys(cart).map(k=>{const p=products.find(x=>x.id==k);return {id:p.id,name:p.name,price:p.price,qty:cart[k],line:p.price*cart[k]}})
+  const subtotal=items.reduce((s,i)=>s+i.line,0)
+  const discount=Math.max(0,parseFloat(discountEl.value||0))
+  const tax=Math.max(0,parseFloat(taxEl.value||0))
+  const total=Math.round(subtotal*(1-discount/100)*(1+tax/100))
+  return {orderId:id,customer:document.getElementById('customerName').value||'Khách lẻ',paymentMethod:document.getElementById('paymentMethod').value,items,subtotal,discount,tax,total,createdAt:new Date().toISOString()}
+}
+function saveOrder(o){
+  const arr=JSON.parse(localStorage.getItem(ORDERS_KEY)||'[]'); arr.unshift(o)
+  localStorage.setItem(ORDERS_KEY,JSON.stringify(arr)); cart={}; renderCart()
+}
+function renderInvoice(order){
+  const d = new Date(order.createdAt)
+  invoicePreview.innerHTML = `
+    <div class="logo">TÊN CỬA HÀNG</div>
+    <div class="small muted">Địa chỉ: Số X, Quận Y — ĐT: 0123 456 789</div>
+    <hr>
+    <div style="display:flex;justify-content:space-between;margin-top:6px">
+      <div class="small">Số Hóa đơn: <strong>${order.orderId}</strong></div>
+      <div class="small">${d.toLocaleString()}</div>
+    </div>
+    <div style="margin-top:6px">Thu ngân: <strong>${order.customer}</strong></div>
+    <table style="width:100%;margin-top:8px">
+      <thead><tr><th>Tên món</th><th class="right">SL</th><th class="right">ĐG</th><th class="right">Thành tiền</th></tr></thead>
+      <tbody>
+        ${order.items.map(it=>`<tr><td>${it.name}</td><td class="right">${it.qty}</td><td class="right">${currency(it.price)}</td><td class="right">${currency(it.line)}</td></tr>`).join('')}
+      </tbody>
+    </table>
+    <hr>
+    <div style="display:flex;justify-content:space-between"><div class="small muted">Tạm tính</div><div class="bold">${currency(order.subtotal)}</div></div>
+    <div style="display:flex;justify-content:space-between"><div class="small muted">Giảm giá</div><div class="bold">${order.discount}%</div></div>
+    <div style="display:flex;justify-content:space-between"><div class="small muted">VAT</div><div class="bold">${order.tax}%</div></div>
+    <div style="display:flex;justify-content:space-between;margin-top:8px"><div class="bold">Tổng thanh toán</div><div class="bold">${currency(order.total)}</div></div>
+    <div style="margin-top:8px" class="small muted">Hình thức thanh toán: ${order.paymentMethod}</div>
+    <div style="text-align:center;margin-top:12px" class="small muted">Cảm ơn quý khách — Hẹn gặp lại!</div>
+    <div style="text-align:center;margin-top:12px" class="small muted"><strong>Một sản phẩm của github.com/HOTRONGBANG</strong></div>
+  `
+}
+
+/* -------------------------
+   Orders list (render, detail, print, export)
+   ------------------------- */
+function renderOrders(){
+  const arr = JSON.parse(localStorage.getItem(ORDERS_KEY) || '[]');
+  const tb = document.getElementById("ordersTable");
+  tb.innerHTML = "";
+
+  const keyword = document.getElementById("searchOrder").value.toLowerCase();
+  const filterDate = document.getElementById("filterDate").value;
+  const filterPayment = document.getElementById("filterPayment").value;
+
+  let list = arr.filter(o => {
+    let ok = true;
+    if (keyword && !(o.orderId + " " + (o.customer || "")).toLowerCase().includes(keyword)) ok = false;
+    if (filterDate && (!o.createdAt || !o.createdAt.startsWith(filterDate))) ok = false;
+    if (filterPayment && o.paymentMethod !== filterPayment) ok = false;
+    return ok;
+  });
+
+  // Tổng tiền & số lượng
+  const totalSum = list.reduce((sum, o) => sum + (o.total || 0), 0);
+  document.getElementById("totalOrdersSum").innerText = `Tổng tất cả: ${currency(totalSum)} (${list.length} hóa đơn)`;
+  document.getElementById("totalOrdersFooter").innerText = currency(totalSum);
+  document.getElementById('btnClearOrders').addEventListener('click',()=>{
+  if(confirm('Xóa toàn bộ hóa đơn?')){ localStorage.setItem(ORDERS_KEY,'[]'); renderOrders(); }
+});
+  if(list.length===0){
+    tb.innerHTML="<tr><td colspan=5 class='small muted' style='padding:12px;text-align:center'>Không có hóa đơn</td></tr>";
+    return;
+  }
+
+  list.forEach(o=>{
+    const tr=document.createElement("tr");
+    tr.innerHTML=`<td>${o.orderId}</td>
+                  <td>${o.customer}</td>
+                  <td>${new Date(o.createdAt).toLocaleString()}</td>
+                  <td>${o.paymentMethod}</td>
+                  <td class="right">${currency(o.total)}</td>`;
+    tr.onclick=()=>showOrderDetail(o);
+    tb.appendChild(tr);
+  });
+}
+
+function showOrderDetail(o){
+  const box=document.getElementById("orderDetail");
+  const content=document.getElementById("orderDetailContent");
+
+  content.innerHTML = `
+    <div class="logo">TÊN CỬA HÀNG</div>
+    <div class="small muted">Địa chỉ: Số X, Quận Y — ĐT: 0123 456 789</div>
+    <hr>
+    <div><strong>Mã HĐ:</strong> ${o.orderId}</div>
+    <div><strong>Khách:</strong> ${o.customer}</div>
+    <div><strong>Ngày:</strong> ${new Date(o.createdAt).toLocaleString()}</div>
+    <div><strong>Thanh toán:</strong> ${o.paymentMethod}</div>
+    <table style="width:100%;margin-top:6px;border-collapse:collapse;">
+      <thead><tr style="background:#f7f9fc"><th style="padding:6px;text-align:left">Sản phẩm</th><th class="right">SL</th><th class="right">ĐG</th><th class="right">Thành tiền</th></tr></thead>
+      <tbody>
+        ${o.items.map(i=>`<tr><td style="padding:6px">${i.name}</td><td style="padding:6px;text-align:right">${i.qty}</td><td style="padding:6px;text-align:right">${currency(i.price)}</td><td style="padding:6px;text-align:right">${currency(i.line)}</td></tr>`).join('')}
+      </tbody>
+    </table>
+    <div style="text-align:right;margin-top:8px;font-weight:700">Tổng: ${currency(o.total)}</div>
+    <div style="text-align:center;margin-top:10px" class="small muted">Cảm ơn quý khách — Hẹn gặp lại!</div>
+  `;
+
+  // in
+  document.getElementById("btnPrintOrder").onclick = () => {
+    const printWin = window.open('', '', 'width=600,height=700');
+    printWin.document.write(`<html><head><title>In hóa đơn</title><style>body{font-family:Arial}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:6px;text-align:left}th{background:#f7f7f7}.right{text-align:right}</style></head><body>${content.innerHTML}</body></html>`);
+    printWin.document.close();
+    printWin.print();
+  };
+
+  document.getElementById("btnCloseDetail").onclick = () => {
+    box.style.display='none';
+  };
+
+  box.style.display='block';
+  box.scrollIntoView({behavior:'smooth', block:'center'});
+}
+
+/* Export to Excel using SheetJS */
+function exportOrdersToExcel(){
+  const arr = JSON.parse(localStorage.getItem(ORDERS_KEY) || '[]');
+  const keyword = document.getElementById("searchOrder").value.toLowerCase();
+  const filterDate = document.getElementById("filterDate").value;
+  const filterPayment = document.getElementById("filterPayment").value;
+  let list = arr.filter(o=>{
+    let ok=true;
+    if (keyword && !(o.orderId + " " + (o.customer || "")).toLowerCase().includes(keyword)) ok=false;
+    if (filterDate && (!o.createdAt || !o.createdAt.startsWith(filterDate))) ok=false;
+    if (filterPayment && o.paymentMethod !== filterPayment) ok=false;
+    return ok;
+  });
+  if(list.length===0){ alert('Không có hóa đơn để xuất'); return; }
+  const data = list.map(o=>({
+    "Mã hóa đơn": o.orderId,
+    "Khách hàng": o.customer,
+    "Ngày tạo": new Date(o.createdAt).toLocaleString(),
+    "Hình thức thanh toán": o.paymentMethod,
+    "Tổng tiền": o.total
+  }));
+  const sum = list.reduce((s,o)=>s+(o.total||0),0);
+  data.push({"Mã hóa đơn":"","Khách hàng":"","Ngày tạo":"","Hình thức thanh toán":"Tổng cộng","Tổng tiền":sum});
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "HoaDon");
+  XLSX.writeFile(wb, "DanhSachHoaDon.xlsx");
+}
+
+/* -------------------------
+   Tabs & theme toggle
+   ------------------------- */
+document.querySelectorAll("nav button").forEach(btn=>{
+  btn.addEventListener("click",()=>{
+    document.querySelectorAll("nav button").forEach(b=>b.classList.remove("active"))
+    btn.classList.add("active")
+    if(btn.dataset.tab==="sales"){
+      document.getElementById("tabSales").style.display="grid";
+      document.getElementById("tabOrders").style.display="none";
+    } else {
+      document.getElementById("tabSales").style.display="none";
+      document.getElementById("tabOrders").style.display="block";
+      renderOrders();
+    }
+  })
+})
+
+const themeToggle = document.getElementById('themeToggle');
+const appRoot = document.getElementById('appRoot');
+themeToggle.addEventListener('click',()=>{
+  if(appRoot.getAttribute('data-theme') === 'light'){
+    appRoot.setAttribute('data-theme','dark');
+    themeToggle.textContent = '☀️ Light';
+  } else {
+    appRoot.setAttribute('data-theme','light');
+    themeToggle.textContent = '🌙 Dark';
+  }
+});
+
+/* -------------------------
+   Init bindings
+   ------------------------- */
+document.getElementById("searchOrder").oninput = renderOrders;
+document.getElementById("filterDate").onchange = renderOrders;
+document.getElementById("filterPayment").onchange = renderOrders;
+
+renderProducts(); renderCart(); renderOrders();
+</script>
+</body>
+</html> 
